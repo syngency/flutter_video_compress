@@ -124,8 +124,8 @@ extension Compress on IVideoCompress {
     String path, {
     VideoQuality quality = VideoQuality.DefaultQuality,
     bool deleteOrigin = false,
-    int? startTime,
-    int? duration,
+    double? startTime,
+    double? duration,
     bool? includeAudio,
     int frameRate = 30,
   }) async {
