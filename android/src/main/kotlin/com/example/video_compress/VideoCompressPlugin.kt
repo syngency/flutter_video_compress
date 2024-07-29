@@ -79,8 +79,8 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                 val path = call.argument<String>("path")!!
                 val quality = call.argument<Int>("quality")!!
                 val deleteOrigin = call.argument<Boolean>("deleteOrigin")!!
-                val startTime = call.argument<Double>("startTime")?.toInt()
-                val duration = call.argument<Double>("duration")?.toInt()
+                val startTime = call.argument<Double>("startTime")?.toLong()
+                val duration = call.argument<Double>("duration")?.toLong()
                 val includeAudio = call.argument<Boolean>("includeAudio") ?: true
                 val frameRate = if (call.argument<Int>("frameRate")==null) 30 else call.argument<Int>("frameRate")
 
