@@ -174,56 +174,45 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         return composition    
     }
     
-    private func compressVideo(_ path: String,_ quality: NSNumber,_ deleteOrigin: Bool,_ startTime: Double?,
-                               _ duration: Double?,_ includeAudio: Bool?,_ frameRate: Int?,
-                               _ result: @escaping FlutterResult) {
-        let sourceVideoUrl = Utility.getPathUrl(path)
-        let sourceVideoType = "mp4"
-        
-        let sourceVideoAsset = avController.getVideoAsset(sourceVideoUrl)
-        let sourceVideoTrack = avController.getTrack(sourceVideoAsset)
+    private func cropVideo(path: String, quality: NSNumber,startTime:Double, endTime:Double,result: @escaping FlutterResult)
+{
+    let sourceURL1=Utility.getPathUrl(path)
+    let manager = FileManager.default
 
-        let uuid = NSUUID()
-        let compressionUrl =
-        Utility.getPathUrl("\(Utility.basePath())/\(Utility.getFileName(path))\(uuid.uuidString).\(sourceVideoType)")
+    guard let documentDirectory = try? manager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true) else {return}
+        let asset = AVAsset(url: sourceURL1 as URL)
+        let length = Float(asset.duration.value) / Float(asset.duration.timescale)
+        print("video length: \(length) seconds")
 
-        let timescale = sourceVideoAsset.duration.timescale
-        let minStartTime = Double(startTime ?? 0)
-        
-        let videoDuration = sourceVideoAsset.duration.seconds
-        let minDuration = Double(duration ?? videoDuration)
-        let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
-        
-        let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
-        let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
-        let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: minDuration)
-        
-        let isIncludeAudio = includeAudio != nil ? includeAudio! : true
-        
-        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!)
-        
-        let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
-        
-        exporter.outputURL = compressionUrl
-        exporter.outputFileType = AVFileType.mp4
-        exporter.shouldOptimizeForNetworkUse = true
-        
-        if frameRate != nil {
-            let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)
-            videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate!))
-            exporter.videoComposition = videoComposition
+        let mediaType = "mp4"
+        let start = startTime
+        let end = endTime
+
+        var compressionUrl = documentDirectory.appendingPathComponent("output")
+        do {
+            try manager.createDirectory(at: compressionUrl, withIntermediateDirectories: true, attributes: nil)
+            compressionUrl = compressionUrl.appendingPathComponent("\(UUID().uuidString).\(mediaType)")
+        }catch let error {
+            print(error)
         }
-        
-        if !isIncludeAudio {
-            exporter.timeRange = timeRange
-        }
-        
-        Utility.deleteFile(compressionUrl.absoluteString)
-        
-        let timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.updateProgress),
-                                         userInfo: exporter, repeats: true)
-        
-        exporter.exportAsynchronously(completionHandler: {
+
+        //Remove existing file
+        _ = try? manager.removeItem(at: compressionUrl)
+
+
+        let exportSession = AVAssetExportSession(asset: asset, presetName: getExportPreset(quality))!
+        exportSession.outputURL = compressionUrl
+        exportSession.outputFileType = AVFileType.mp4
+
+        let startTime = CMTime(seconds: Double(start ), preferredTimescale: 1000)
+        let endTime = CMTime(seconds: Double(end ), preferredTimescale: 1000)
+        let timeRange = CMTimeRange(start: startTime, end: endTime)
+
+        exportSession.timeRange = timeRange
+
+        let timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.updateProgress),userInfo: exportSession, repeats: true)
+
+        exportSession.exportAsynchronously(completionHandler: {
             timer.invalidate()
             if(self.stopCommand) {
                 self.stopCommand = false
@@ -232,25 +221,122 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
                 let jsonString = Utility.keyValueToJson(json)
                 return result(jsonString)
             }
-            if deleteOrigin {
-                let fileManager = FileManager.default
-                do {
-                    if fileManager.fileExists(atPath: path) {
-                        try fileManager.removeItem(atPath: path)
-                    }
-                    self.exporter = nil
-                    self.stopCommand = false
-                }
-                catch let error as NSError {
-                    print(error)
-                }
-            }
+            // if deleteOrigin {
+            //     let fileManager = FileManager.default
+            //     do {
+            //         if fileManager.fileExists(atPath: path) {
+            //             try fileManager.removeItem(atPath: path)
+            //         }
+            //         self.exporter = nil
+            //         self.stopCommand = false
+            //     }
+            //     catch let error as NSError {
+            //         print(error)
+            //     }
+            // }
             var json = self.getMediaInfoJson(Utility.excludeEncoding(compressionUrl.path))
             json["isCancel"] = false
             let jsonString = Utility.keyValueToJson(json)
             result(jsonString)
         })
-        self.exporter = exporter
+        self.exporter = exportSession    
+    }
+
+    private func compressVideo(_ path: String,_ quality: NSNumber,_ deleteOrigin: Bool,_ startTime: Double?,
+                               _ duration: Double?,_ includeAudio: Bool?,_ frameRate: Int?,
+                               _ result: @escaping FlutterResult) {
+
+        let start=startTime ?? 0
+        let end = start + (duration ?? 0)
+        cropVideo(path: path, quality: quality, startTime: start, endTime: end, result: result)
+        
+        // let sourceVideoUrl = Utility.getPathUrl(path)
+        // let sourceVideoType = "mp4"
+        
+        // let sourceVideoAsset = avController.getVideoAsset(sourceVideoUrl)
+        // let sourceVideoTrack = avController.getTrack(sourceVideoAsset)
+
+        // let uuid = NSUUID()
+        // let compressionUrl =
+        // Utility.getPathUrl("\(Utility.basePath())/\(Utility.getFileName(path))\(uuid.uuidString).\(sourceVideoType)")
+
+        // let timescale = sourceVideoAsset.duration.timescale
+        // let minStartTime = Double(startTime ?? 0)
+        
+        // let videoDuration = sourceVideoAsset.duration.seconds
+        // let minDuration = Double(duration ?? videoDuration)
+        // let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
+        
+        // let cmStartTime = CMTime(second: minStartTime, preferredTimescale: timescale)
+        // let cmEndTime = CMTimeMakeWithSeconds(minStartTime+minDuration, preferredTimescale: timescale)
+        // let timeRange: CMTimeRange = CMTimeRange(start: cmStartTime, end: cmDurationTime)
+        
+        // /*
+        // let isIncludeAudio = includeAudio != nil ? includeAudio! : true
+        
+        // let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!)
+        
+        // let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
+        
+        // exporter.outputURL = compressionUrl
+        // exporter.outputFileType = AVFileType.mp4
+        // exporter.shouldOptimizeForNetworkUse = true
+        
+        // if frameRate != nil {
+        //     let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)
+        //     videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate!))
+        //     exporter.videoComposition = videoComposition
+        // }
+        
+        // if !isIncludeAudio {
+        //     exporter.timeRange = timeRange
+        // }
+        // */
+
+        // Utility.deleteFile(compressionUrl.absoluteString)
+        
+        // guard let exportSession = AVAssetExportSession(asset: sourceVideoAsset, presetName: getExportPreset(quality)) else {return}
+        // exportSession.outputURL = outputURL
+        // exportSession.outputFileType = .mp4
+
+        // let startTime = CMTime(seconds: Double(startTime), preferredTimescale: 1000)
+        // let endTime = CMTime(seconds: Double(startTime + duration), preferredTimescale: 1000)
+        // let timeRange = CMTimeRange(start: startTime, end: endTime)
+
+        // exportSession.timeRange = timeRange
+        
+        
+        // let timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.updateProgress),
+        //                                  userInfo: exporter, repeats: true)
+        
+        // exporter.exportAsynchronously(completionHandler: {
+        //     timer.invalidate()
+        //     if(self.stopCommand) {
+        //         self.stopCommand = false
+        //         var json = self.getMediaInfoJson(path)
+        //         json["isCancel"] = true
+        //         let jsonString = Utility.keyValueToJson(json)
+        //         return result(jsonString)
+        //     }
+        //     if deleteOrigin {
+        //         let fileManager = FileManager.default
+        //         do {
+        //             if fileManager.fileExists(atPath: path) {
+        //                 try fileManager.removeItem(atPath: path)
+        //             }
+        //             self.exporter = nil
+        //             self.stopCommand = false
+        //         }
+        //         catch let error as NSError {
+        //             print(error)
+        //         }
+        //     }
+        //     var json = self.getMediaInfoJson(Utility.excludeEncoding(compressionUrl.path))
+        //     json["isCancel"] = false
+        //     let jsonString = Utility.keyValueToJson(json)
+        //     result(jsonString)
+        // })
+        // self.exporter = exporter
     }
     
     private func cancelCompression(_ result: FlutterResult) {
