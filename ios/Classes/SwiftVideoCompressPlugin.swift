@@ -196,7 +196,7 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         
         let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
         let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
-        let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: cmDurationTime)
+        let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: minDuration)
         
         let isIncludeAudio = includeAudio != nil ? includeAudio! : true
         
