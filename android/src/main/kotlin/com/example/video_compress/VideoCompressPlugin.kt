@@ -198,11 +198,6 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
     companion object {
         private const val TAG = "video_compress"
 
-        @JvmStatic
-        fun registerWith(registrar: Registrar) {
-            val instance = VideoCompressPlugin()
-            instance.init(registrar.context(), registrar.messenger())
-        }
     }
 
 }
